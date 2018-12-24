@@ -2,10 +2,15 @@ package com.aliouswang.retrofit;
 
 import android.support.annotation.Nullable;
 
+import com.aliouswang.retrofit.annotations.GET;
+import com.aliouswang.retrofit.annotations.POST;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import okhttp3.Headers;
@@ -23,6 +28,20 @@ final class RequestFactory {
 
     private final boolean hasBody;
     private final boolean isFormEncoded;
+    private final boolean isMultipart;
+
+    RequestFactory(Builder builder) {
+        this.method = builder.method;
+        this.baseUrl = null;
+        this.httpMethod = builder.httpMethod;
+        this.relativeUrl = builder.relativeUrl;
+        this.headers = builder.headers;
+        this.contentType = builder.contentType;
+
+        this.hasBody = builder.hasBody;
+        this.isFormEncoded = builder.isFormEncoded;
+        this.isMultipart = builder.isMultipart;
+    }
 
 
     static final class Builder {
@@ -62,8 +81,48 @@ final class RequestFactory {
             this.parameterTypes = method.getParameterTypes();
         }
 
+        RequestFactory build() {
+            for (Annotation annotation : methodAnnotations) {
+                parseMethodAnnotation(annotation);
+            }
+
+            int parmeterCount = parameterAnnotationsArray.length;
+
+        }
+
+        private void parseMethodAnnotation(Annotation annotation) {
+            if (annotation instanceof GET) {
+                parseHttpMethodsAndPath("GET", ((GET) annotation).value(), false);
+            }else if (annotation instanceof POST) {
+                parseHttpMethodsAndPath("POST", ((POST) annotation).value(), true);
+            }
+        }
+
+        private void parseHttpMethodsAndPath(String httpMethod, String value, boolean hasBody) {
+            if (this.httpMethod != null) {
+                throw Utils.methodError(method, "Only one HTTP method is allowed. Found: %s and %s."
+                , this.httpMethod, httpMethod);
+            }
+            this.httpMethod = httpMethod;
+            this.hasBody = hasBody;
+
+            if (value.isEmpty()) {
+                return;
+            }
+
+            this.relativeUrl = value;
+            this.relativeUrlParamNames = parsePathParameters(value);
+        }
 
 
+        static Set<String> parsePathParameters(String path) {
+            Matcher m = PARAM_URL_REGEX.matcher(path);
+            Set<String> patterns = new LinkedHashSet<>();
+            while (m.find()) {
+                patterns.add(m.group(1));
+            }
+            return patterns;
+        }
     }
 
 
